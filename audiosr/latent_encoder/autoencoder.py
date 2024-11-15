@@ -14,7 +14,7 @@ import soundfile as sf
 from audiosr.utilities.model import get_vocoder
 from audiosr.utilities.tools import synth_one_sample
 
-
+encode_exported = False
 class AutoencoderKL(nn.Module):
     def __init__(
         self,
@@ -101,15 +101,49 @@ class AutoencoderKL(nn.Module):
         print(f"Restored from {path}")
 
     def encode(self, x):
+        global encode_exported
+        #import traceback
+        #traceback.print_stack()
         # x = self.time_shuffle_operation(x)
         # x = self.freq_split_subband(x)
+        
+        # need to check if we're inside onnx export, as this code is executed as part of vae_feature_extract onnx export.
+        # (and we can't have an torch.onnx.export inside of an torch.onnx.export)
+        if not torch.onnx.is_in_onnx_export() and encode_exported==False:
+            print("converting to encoder to onnx model..")
+            torch.onnx.export(self.encoder, (x), "audiosr_encoder.onnx", input_names=["x"], output_names=["h"])
+            print("conversion done!")
+            
+        
         h = self.encoder(x)
+        
+        
+        if not torch.onnx.is_in_onnx_export() and encode_exported==False:
+            print("converting to quant_conv to onnx model..")
+            torch.onnx.export(self.quant_conv, (h), "quant_conv.onnx", input_names=["h"], output_names=["moments"])
+            print("conversion done!")
+
+            encode_exported = True
+            
         moments = self.quant_conv(h)
         posterior = DiagonalGaussianDistribution(moments)
+
         return posterior
 
     def decode(self, z):
+    
+        if True:
+            print("converting to post_quant_conv to onnx model..")
+            torch.onnx.export(self.post_quant_conv, (z), "post_quant_conv.onnx", input_names=["in"], output_names=["out"])
+            print("conversion done!")
+               
         z = self.post_quant_conv(z)
+        
+        if True: 
+            print("converting to decoder to onnx model..")
+            torch.onnx.export(self.decoder, (z), "audiosr_decoder.onnx", input_names=["z"], output_names=["dec"])
+            print("conversion done!")
+            
         dec = self.decoder(z)
         # bs, ch, shuffled_timesteps, fbins = dec.size()
         # dec = self.time_unshuffle_operation(dec, bs, int(ch*shuffled_timesteps), fbins)

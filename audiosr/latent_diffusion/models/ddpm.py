@@ -609,6 +609,7 @@ class LatentDiffusion(DDPM):
         *args,
         **kwargs,
     ):
+        self.first_time = True
         self.learning_rate = base_learning_rate
         self.num_timesteps_cond = default(num_timesteps_cond, 1)
         self.scale_by_std = scale_by_std
@@ -798,9 +799,16 @@ class LatentDiffusion(DDPM):
 
         # Classifier-free guidance
         if not unconditional_cfg:
-            c = self.cond_stage_models[
+            csm = self.cond_stage_models[
                 self.cond_stage_model_metadata[key]["model_idx"]
-            ](c)
+            ]
+
+            if True:
+                print("converting ", type(csm), " to onnx..")
+                torch.onnx.export(csm, (c), "vae_feature_extract.onnx", input_names=["input"], output_names=["output"])
+                print("conversion done!")
+   
+            c = csm(c)
         else:
             # when the cond_stage_key is "all", pick one random element out
             if isinstance(c, dict):
@@ -924,6 +932,12 @@ class LatentDiffusion(DDPM):
         if len(mel.size()) == 4:
             mel = mel.squeeze(1)
         mel = mel.permute(0, 2, 1)
+        
+        if True:
+            print("converting vocoder to onnx model..")
+            torch.onnx.export(self.first_stage_model.vocoder, (mel), "vocoder.onnx", input_names=["mel"], output_names=["waveform"])
+            print("conversion done!")
+        
         waveform = self.first_stage_model.vocoder(mel)
         waveform = waveform.cpu().detach().numpy()
         if save:
@@ -1023,8 +1037,32 @@ class LatentDiffusion(DDPM):
         for key in self.conditioning_key:
             new_cond_dict[key] = cond_dict[key]
         return new_cond_dict
-
+        
     def apply_model(self, x_noisy, t, cond, return_ids=False):
+        cond = self.reorder_cond_dict(cond)
+        
+        if self.first_time:
+            self.first_time = False
+            
+            self.model.eval()
+            
+            if True:
+                print("converting", type(self.model), "to onnx...")
+                torch.onnx.export(self.model, (x_noisy, t, cond['concat_lowpass_cond']), "ddpm.onnx",
+                input_names=["x_noisy", "t", "cond"], output_names=["x_recon"])
+                print("conversion done!")
+        
+        # we've tweaked the forward method to take value directly...
+        x_recon = self.model(x_noisy, t, cond['concat_lowpass_cond'])
+        
+        if isinstance(x_recon, tuple) and not return_ids:
+            return x_recon[0]
+        else:
+            return x_recon
+    
+    # this is original 'apply_model' function, which passes dictionary to
+    #  model operator (original forward)
+    def apply_model_old(self, x_noisy, t, cond, return_ids=False):
         cond = self.reorder_cond_dict(cond)
 
         x_recon = self.model(x_noisy, t, cond_dict=cond)
@@ -1632,8 +1670,27 @@ class DiffusionWrapper(nn.Module):
                 raise Value("The conditioning key %s is illegal" % key)
 
         self.being_verbosed_once = False
+        
+    def forward(self, x, t, cond_dict_value):
+        x = x.contiguous()
+        t = t.contiguous()
 
-    def forward(self, x, t, cond_dict: dict = {}):
+        # x with condition (or maybe not)
+        xc = x
+
+        y = None
+        context_list, attn_mask_list = [], []
+
+        cond = cond_dict_value
+        cond = cond * self.scale_factor
+        xc = torch.cat([x, cond], dim=1)
+        
+        out = self.diffusion_model(
+            xc, t, context_list=context_list, y=y, context_attn_mask_list=attn_mask_list
+        )
+        return out
+
+    def forward_old(self, x, t, cond_dict: dict = {}):
         x = x.contiguous()
         t = t.contiguous()
 
