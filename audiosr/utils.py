@@ -80,7 +80,8 @@ def lowpass_filtering_prepare_inference(dl_output):
         cutoff_freq = 24000
 
     order = 8
-    ftype = np.random.choice(["butter", "cheby1", "ellip", "bessel"])
+    #ftype = np.random.choice(["butter", "cheby1", "ellip", "bessel"])
+    ftype = "butter"
     filtered_audio = lowpass(
         waveform.numpy().squeeze(),
         highcut=cutoff_freq,
