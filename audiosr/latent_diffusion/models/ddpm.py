@@ -803,7 +803,7 @@ class LatentDiffusion(DDPM):
                 self.cond_stage_model_metadata[key]["model_idx"]
             ]
 
-            if True:
+            if "DISABLE_ONNX_CONVERSION" not in os.environ:
                 print("converting ", type(csm), " to onnx..")
                 torch.onnx.export(csm, (c), "vae_feature_extract.onnx", input_names=["input"], output_names=["output"])
                 print("conversion done!")
@@ -933,7 +933,7 @@ class LatentDiffusion(DDPM):
             mel = mel.squeeze(1)
         mel = mel.permute(0, 2, 1)
         
-        if True:
+        if "DISABLE_ONNX_CONVERSION" not in os.environ:
             print("converting vocoder to onnx model..")
             torch.onnx.export(self.first_stage_model.vocoder, (mel), "vocoder.onnx", input_names=["mel"], output_names=["waveform"])
             print("conversion done!")
@@ -1046,7 +1046,7 @@ class LatentDiffusion(DDPM):
             
             self.model.eval()
             
-            if True:
+            if "DISABLE_ONNX_CONVERSION" not in os.environ:
                 print("converting", type(self.model), "to onnx...")
                 torch.onnx.export(self.model, (x_noisy, t, cond['concat_lowpass_cond']), "ddpm.onnx",
                 input_names=["x_noisy", "t", "cond"], output_names=["x_recon"])

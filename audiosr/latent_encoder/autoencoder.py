@@ -109,7 +109,7 @@ class AutoencoderKL(nn.Module):
         
         # need to check if we're inside onnx export, as this code is executed as part of vae_feature_extract onnx export.
         # (and we can't have an torch.onnx.export inside of an torch.onnx.export)
-        if not torch.onnx.is_in_onnx_export() and encode_exported==False:
+        if not torch.onnx.is_in_onnx_export() and encode_exported==False and "DISABLE_ONNX_CONVERSION" not in os.environ:
             print("converting to encoder to onnx model..")
             torch.onnx.export(self.encoder, (x), "audiosr_encoder.onnx", input_names=["x"], output_names=["h"])
             print("conversion done!")
@@ -118,7 +118,7 @@ class AutoencoderKL(nn.Module):
         h = self.encoder(x)
         
         
-        if not torch.onnx.is_in_onnx_export() and encode_exported==False:
+        if not torch.onnx.is_in_onnx_export() and encode_exported==False and "DISABLE_ONNX_CONVERSION" not in os.environ:
             print("converting to quant_conv to onnx model..")
             torch.onnx.export(self.quant_conv, (h), "quant_conv.onnx", input_names=["h"], output_names=["moments"])
             print("conversion done!")
@@ -132,14 +132,14 @@ class AutoencoderKL(nn.Module):
 
     def decode(self, z):
     
-        if True:
+        if "DISABLE_ONNX_CONVERSION" not in os.environ:
             print("converting to post_quant_conv to onnx model..")
             torch.onnx.export(self.post_quant_conv, (z), "post_quant_conv.onnx", input_names=["in"], output_names=["out"])
             print("conversion done!")
                
         z = self.post_quant_conv(z)
         
-        if True: 
+        if "DISABLE_ONNX_CONVERSION" not in os.environ: 
             print("converting to decoder to onnx model..")
             torch.onnx.export(self.decoder, (z), "audiosr_decoder.onnx", input_names=["z"], output_names=["dec"])
             print("conversion done!")
