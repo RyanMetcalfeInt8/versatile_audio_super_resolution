@@ -92,3 +92,42 @@ If you find this repo useful, please consider citing:
   year={2023}
 }
 ```
+
+## Conversion to ONNX, and then to OpenVINO steps
+
+Setup onnx conversion python env.
+```
+python -m venv conv_env
+conv_env\Scripts\activate
+pip install requirements.txt
+```
+
+Run example snippet to generate onnx models:
+```
+python audiosr -i example\music_clipped.wav -s test_out --model_name basic
+```
+
+Create new python env. for onnx -> OpenVINO IR conversion
+```
+python -m venv ov_env
+ov_env\Scripts\activate
+pip install openvino-dev[onnx]==2024.4.0
+```
+
+Convert all onnx models to OpenVINO IR using mo (model optimizer):
+```
+mo --input_model audiosr_decoder.onnx
+mo --input_model audiosr_encoder.onnx
+mo --input_model ddpm.onnx
+mo --input_model post_quant_conv.onnx
+mo --input_model quant_conv.onnx
+mo --input_model vae_feature_extract.onnx
+mo --input_model vocoder.onnx
+```
+
+Note that to get 'speech' specific version of ddpm.onnx / IR, you would need to re-run example snippet with `--model_name speech`:
+```
+python audiosr -i example\music_clipped.wav -s test_out --model_name speech
+```
+(all onnx models other than ddpm.onnx should be identical between basic / speech)
+
