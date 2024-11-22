@@ -159,6 +159,7 @@ def super_resolution(
     latent_t_per_second=12.8,
     config=None,
 ):
+    latent_diffusion.set_seed(seed)
     seed_everything(int(seed))
     waveform = None
 

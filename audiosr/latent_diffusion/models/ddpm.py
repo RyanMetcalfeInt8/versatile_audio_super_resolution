@@ -80,7 +80,7 @@ class DDPM(nn.Module):
         learn_logvar=False,
         logvar_init=0.0,
         evaluator=None,
-        device=None,
+        device=None
     ):
         super().__init__()
         assert parameterization in [
@@ -177,11 +177,16 @@ class DDPM(nn.Module):
         }
         self.initial_learning_rate = None
         self.test_data_subset_path = None
+        self.gen = None
 
     def get_log_dir(self):
         return os.path.join(
             self.logger_save_dir, self.logger_exp_group_name, self.logger_exp_name
         )
+
+    def set_seed(self, seed):
+        self.gen = torch.Generator()
+        self.gen.manual_seed(seed)
 
     def set_log_dir(self, save_dir, exp_group_name, exp_name):
         self.logger_save_dir = save_dir
@@ -785,7 +790,7 @@ class LatentDiffusion(DDPM):
 
     def get_first_stage_encoding(self, encoder_posterior):
         if isinstance(encoder_posterior, DiagonalGaussianDistribution):
-            z = encoder_posterior.sample()
+            z = encoder_posterior.sample(gen=self.gen)
         elif isinstance(encoder_posterior, torch.Tensor):
             z = encoder_posterior
         else:
@@ -1466,6 +1471,7 @@ class LatentDiffusion(DDPM):
         intermediate = None
         if ddim and not use_plms:
             ddim_sampler = DDIMSampler(self, device=self.device)
+            ddim_sampler.set_gen(self.gen)
             samples, intermediates = ddim_sampler.sample(
                 ddim_steps,
                 batch_size,

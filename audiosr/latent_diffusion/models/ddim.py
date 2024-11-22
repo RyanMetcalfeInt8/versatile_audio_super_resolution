@@ -19,6 +19,10 @@ class DDIMSampler(object):
         self.ddpm_num_timesteps = model.num_timesteps
         self.schedule = schedule
         self.device = device
+        self.gen = None
+
+    def set_gen(self, gen):
+        self.gen = gen
 
     def register_buffer(self, name, attr):
         if type(attr) == torch.Tensor:
@@ -188,7 +192,7 @@ class DDIMSampler(object):
         device = self.model.betas.device
         b = shape[0]
         if x_T is None:
-            img = torch.randn(shape, device=device)
+            img = torch.randn(shape, device=device, generator=self.gen)
         else:
             img = x_T
 
@@ -349,7 +353,9 @@ class DDIMSampler(object):
 
         # direction pointing to x_t
         dir_xt = (1.0 - a_prev - sigma_t**2).sqrt() * e_t
-        noise = sigma_t * noise_like(x.shape, device, repeat_noise) * temperature
+
+        noise_like_ret = noise_like(x.shape, device, repeat_noise, gen=self.gen)
+        noise = sigma_t * noise_like_ret * temperature
         if noise_dropout > 0.0:
             noise = torch.nn.functional.dropout(noise, p=noise_dropout)
         x_prev = a_prev.sqrt() * pred_x0 + dir_xt + noise
